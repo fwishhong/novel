@@ -1,0 +1,204 @@
+// Prisma schema for Novel Writing Application
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// 用户模型
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  novels    Novel[]
+}
+
+// 小说模型
+model Novel {
+  id          String    @id @default(cuid())
+  title       String
+  genre       String?
+  description String?
+  outline     String?   // 总体大纲
+  status      String    @default("draft") // draft, writing, completed
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  characters  Character[]
+  chapters    Chapter[]
+  worldSettings WorldSetting[]
+  memories    Memory[]
+  timelines   Timeline[]
+  plotPoints  PlotPoint[]
+}
+
+// 人物模型
+model Character {
+  id          String   @id @default(cuid())
+  name        String
+  age         Int?
+  gender      String?
+  personality String?  // 性格描述
+  background  String?  // 背景故事
+  appearance  String?  // 外貌描述
+  abilities   String?  // 能力/技能
+  goals       String?  // 目标/动机
+  speechPattern String? // 说话风格
+  importance  String   @default("main") // main, supporting, minor
+  status      String   @default("alive") // alive, dead, unknown
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  novelId     String
+  novel       Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  relationships     Relationship[] @relation("CharacterFrom")
+  relationshipsTo   Relationship[] @relation("CharacterTo")
+  appearances       Scene[]        @relation("SceneCharacters")
+  developmentEvents CharacterEvent[]
+  memories          Memory[]       @relation("MemoryCharacters")
+}
+
+// 人物关系
+model Relationship {
+  id          String   @id @default(cuid())
+  type        String   // friend, enemy, family, lover, mentor, etc.
+  description String?
+  strength    Int      @default(5) // 1-10
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  fromCharacterId String
+  fromCharacter   Character @relation("CharacterFrom", fields: [fromCharacterId], references: [id], onDelete: Cascade)
+
+  toCharacterId   String
+  toCharacter     Character @relation("CharacterTo", fields: [toCharacterId], references: [id], onDelete: Cascade)
+
+  @@unique([fromCharacterId, toCharacterId])
+}
+
+// 人物发展事件
+model CharacterEvent {
+  id          String   @id @default(cuid())
+  eventType   String   // growth, trauma, achievement, loss
+  description String
+  impact      String?  // 对角色的影响
+  chapterNumber Int?
+  createdAt   DateTime @default(now())
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+// 章节模型
+model Chapter {
+  id          String   @id @default(cuid())
+  number      Int
+  title       String
+  outline     String?  // 章节大纲
+  content     String?  // 章节内容
+  wordCount   Int      @default(0)
+  status      String   @default("draft") // draft, writing, completed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  novelId     String
+  novel       Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  scenes      Scene[]
+  plotPoints  PlotPoint[]
+
+  @@unique([novelId, number])
+}
+
+// 场景模型
+model Scene {
+  id          String   @id @default(cuid())
+  order       Int      // 场景顺序
+  location    String?  // 地点
+  timeOfDay   String?  // 时间
+  description String?  // 场景描述
+  content     String?  // 场景内容
+  mood        String?  // 氛围/情绪
+  purpose     String?  // 场景目的（推进情节、展现人物等）
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  chapterId   String
+  chapter     Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  characters  Character[] @relation("SceneCharacters")
+
+  @@unique([chapterId, order])
+}
+
+// 世界设定
+model WorldSetting {
+  id          String   @id @default(cuid())
+  category    String   // geography, magic_system, politics, culture, technology
+  title       String
+  description String
+  importance  Int      @default(5) // 1-10
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  novelId     String
+  novel       Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+}
+
+// 时间线
+model Timeline {
+  id          String   @id @default(cuid())
+  eventName   String
+  eventDate   String   // 可以是虚构的日期系统
+  description String
+  importance  Int      @default(5)
+  createdAt   DateTime @default(now())
+
+  novelId     String
+  novel       Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+}
+
+// 情节点（伏笔、关键事件）
+model PlotPoint {
+  id          String   @id @default(cuid())
+  type        String   // foreshadowing, climax, twist, resolution
+  description String
+  setupChapterNumber Int?    // 伏笔埋下的章节
+  payoffChapterNumber Int?   // 伏笔回收的章节
+  status      String   @default("setup") // setup, developing, resolved
+  importance  Int      @default(5)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  novelId     String
+  novel       Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  chapterId   String?
+  chapter     Chapter? @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+}
+
+// 记忆/上下文系统（用于AI生成时的一致性检查）
+model Memory {
+  id          String   @id @default(cuid())
+  type        String   // character_trait, event, setting, rule
+  content     String
+  context     String?  // 相关上下文
+  importance  Int      @default(5)
+  chapterNumber Int?   // 相关章节
+  createdAt   DateTime @default(now())
+
+  novelId     String
+  novel       Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  relatedCharacters Character[] @relation("MemoryCharacters")
+}
